@@ -4,7 +4,7 @@ StackResult VerifyInitalize(Stack* stack)
 {
 	if (!stack)
 		return STACK_NOT_INITALIZED;
-	if (stack->init_status != IS_INITALIZED)
+	if (stack->init_status == NOT_INITALIZED)
 		return STACK_NOT_INITALIZED;
 
 	return STACK_OK;

@@ -4,11 +4,16 @@
 
 #include "stack.h"
 #include "stack_utils.h"
-#include "stack_verify.h"
+#include "prot/stack_verify.h"
 
 #ifdef  STACK_USE_CANARY
-#include "stack_canary.h"
+#include "prot/stack_canary.h"
 #endif
+
+#ifdef  STACK_USE_HASH
+#include "prot/stack_hash.h"
+#endif
+
 
 #define TRY(function) { StackResult err = function; if (err != STACK_OK) return err; }
 
@@ -17,7 +22,7 @@ static void* GetEndPtr(Stack* stack, size_t offset = 0)
 	if (!stack)
 		return stack;
 
-	return (void*)((char*)stack->data + (stack->size + offset) * stack->cell_size);
+	return (void*)((uint8_t*)stack->data + (stack->size + offset) * stack->cell_size);
 }
 
 StackResult Realloc(Stack * stack, size_t new_capacity)
@@ -38,17 +43,29 @@ StackResult Realloc(Stack * stack, size_t new_capacity)
 
 	if (possible_cap != stack->capacity)
 	{
+
+#ifdef STACK_USE_SELF_HASH
+        RemoveFromHash(&stack->self_hash, &stack->data, sizeof(void*));
+        RemoveFromHash(&stack->self_hash, &stack->capacity, sizeof(size_t));
+#endif
+
 		stack->capacity = possible_cap;
 
 #ifdef STACK_USE_CANARY
 
-		stack->data = (char*)(stack->data) - CANARY_SIZE;
+		stack->data = (uint8_t*)(stack->data) - CANARY_SIZE;
 		stack->data = realloc(stack->data, possible_cap * stack->cell_size + 2 * CANARY_SIZE);
-		stack->data = (char*)(stack->data) + CANARY_SIZE;
+		stack->data = (uint8_t*)(stack->data) + CANARY_SIZE;
 
 		SetCanary(stack);
 #else
 		stack->data = realloc(stack->data, possible_cap * stack->cell_size);
+#endif
+
+
+#ifdef STACK_USE_SELF_HASH
+        AddToHash(&stack->self_hash, &stack->data, sizeof(void*));
+        AddToHash(&stack->self_hash, &stack->capacity, sizeof(size_t));
 #endif
 
 	}
@@ -68,11 +85,19 @@ StackResult Ctor(Stack * stack, size_t cell_size)
 #ifdef STACK_USE_CANARY
 
 	stack->data = calloc(cell_size + 2 * CANARY_SIZE, 1);
-	stack->data = (char*)(stack->data) + CANARY_SIZE;
+	stack->data = (uint8_t*)(stack->data) + CANARY_SIZE;
 
 	SetCanary(stack);
 #else
 	stack->data = calloc(1, cell_size);
+#endif
+
+#ifdef STACK_USE_SELF_HASH
+    SetSelfHash(stack);
+#endif
+
+#ifdef STACK_USE_DATA_HASH
+    SetDataHash(stack);
 #endif
 
 	return stack->data ? STACK_OK : STACK_CTOR_ERROR;
@@ -84,7 +109,7 @@ StackResult Dtor(Stack * stack)
 		return STACK_DTOR_NOSTACK_ERROR;
 
 #ifdef STACK_USE_CANARY
-	free((void*)(((char*)stack->data) - CANARY_SIZE));
+	free((void*)(((uint8_t*)stack->data) - CANARY_SIZE));
 #else
 	free(stack->data);
 #endif
@@ -94,6 +119,16 @@ StackResult Dtor(Stack * stack)
 	stack->size        = NOT_INITALIZED;
 	stack->capacity    = NOT_INITALIZED;
 	stack->data        = (void*)NOT_INITALIZED;
+
+#ifdef STACK_USE_SELF_HASH
+    stack->left_hash_ref  = uint8_t(NOT_INITALIZED);
+    stack->right_hash_ref = uint8_t(NOT_INITALIZED);
+    stack->self_hash      = NOT_INITALIZED;
+#endif
+
+#ifdef STACK_USE_DATA_HASH
+    stack->data_hash = NOT_INITALIZED;
+#endif
 
 	return STACK_OK;
 }
@@ -105,12 +140,24 @@ StackResult Push(Stack * stack, void* item)
 	if (!item)
 		return STACK_PUSH_BADITEM_ERROR;
 
-	TRY(StackRealloc(stack, stack->size + 1))
+	TRY(Realloc(stack, stack->size + 1))
 
 	void* errp = memcpy(GetEndPtr(stack), item, stack->cell_size);
 	if (!errp) return STACK_PUSH_NOALLOC_ERROR;
 
+#ifdef STACK_USE_DATA_HASH
+    AddToHash(&stack->data_hash, GetEndPtr(stack), stack->cell_size);
+#endif
+
+#ifdef STACK_USE_SELF_HASH
+    RemoveFromHash(&stack->self_hash, &stack->size, sizeof(size_t));
+#endif
+
 	stack->size++;
+
+#ifdef STACK_USE_SELF_HASH
+    AddToHash(&stack->self_hash, &stack->size, sizeof(size_t));
+#endif
 
 	return STACK_OK;
 }
@@ -138,8 +185,21 @@ StackResult Pop(Stack * stack)
 	if (stack->size == 0)
 		return STACK_POP_EMPTY_ERROR;
 
-	stack->size--;
-	TRY(StackRealloc(stack, stack->size))
+#ifdef STACK_USE_DATA_HASH
+    RemoveFromHash(&stack->data_hash, GetEndPtr(stack, -1), stack->cell_size);
+#endif
+
+#ifdef STACK_USE_SELF_HASH
+    RemoveFromHash(&stack->self_hash, &stack->size, sizeof(size_t));
+#endif
+
+    stack->size--;
+
+#ifdef STACK_USE_SELF_HASH
+    AddToHash(&stack->self_hash, &stack->size, sizeof(size_t));
+#endif
+
+	TRY(Realloc(stack, stack->size))
 
 	return STACK_OK;
 }
@@ -160,16 +220,29 @@ StackResult Verify(Stack* stack)
 	TRY(VerifyCanary(stack))
 #endif
 
+#ifdef STACK_USE_SELF_HASH
+	TRY(VerifySelfHash(stack))
+#endif
+
+#ifdef STACK_USE_DATA_HASH
+	TRY(VerifyDataHash(stack))
+#endif
+
 	return STACK_OK;
 }
 
 StackResult Dump(Stack* stack)
 {
 	printf("DUMP:      %p\n", stack);
-	printf("SIZE:      %ld\n", stack->size);
-	printf("CAPACITY:  %ld\n", stack->capacity);
-	printf("CELL_SIZE: %ld\n", stack->cell_size);
-	printf("DATA:      %p\n", stack->data);
+#ifdef STACK_USE_CANARY
+	printf("\nLEFT CANARY:  %x\n", stack->left_canary);
+	printf("RIGHT CANARY: %x\n\n", stack->right_canary);
+#endif
+	printf("INIT_STATUS:  %x\n", stack->init_status);
+	printf("SIZE:         %ld\n", stack->size);
+	printf("CAPACITY:     %ld\n", stack->capacity);
+	printf("CELL_SIZE:    %ld\n", stack->cell_size);
+	printf("DATA:         %p\n", stack->data);
 	printf("%d bytes: ", stack->size);
 
 	int i;

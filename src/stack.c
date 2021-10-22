@@ -10,6 +10,7 @@
 	printf("Error in %s at line %d: ", __PRETTY_FUNCTION__, __LINE__);  \
 	StackPrintErrDescription(error_code, stdout);						\
 	printf("\n"); 													    \
+	Dump(stack);						                    			\
 	abort(); 														    \
 }
 
@@ -25,6 +26,7 @@
 	if (error_code == STACK_MEM_CORRUPTED)		       \
 		ABORT(STACK_MEM_CORRUPTED);				       \
 												       \
+													   \
 	if (error_code != STACK_OK)					       \
 		ABORT(MERGE_RESULTS(error_base, error_code));  \
 }
