@@ -1,4 +1,71 @@
-#include "stack_hash.h"
+#include "stack_protection.h"
+
+StackResult VerifyInitalize(Stack* stack)
+{
+	if (!stack)
+		return STACK_NOT_INITALIZED;
+	if (stack->init_status == NOT_INITALIZED)
+		return STACK_NOT_INITALIZED;
+
+	return STACK_OK;
+}
+
+StackResult VerifyParams(Stack * stack)
+{
+	if (stack->init_status != IS_INITALIZED)
+		return STACK_MEM_CORRUPTED;
+
+	if (stack->cell_size == NOT_INITALIZED ||
+		stack->size      == NOT_INITALIZED ||
+		stack->capacity  == NOT_INITALIZED ||
+		stack->data      == (void*)NOT_INITALIZED)
+		return STACK_MEM_CORRUPTED;
+		
+	if (stack->size > stack->capacity)
+		return STACK_MEM_CORRUPTED;
+	if (!stack->data)
+		return STACK_MEM_CORRUPTED;
+
+	return STACK_OK;
+}
+
+
+#ifdef STACK_USE_CANARY
+
+StackResult SetCanary(Stack* stack)
+{
+	stack->left_canary = CANARY_VALUE;
+	stack->right_canary = CANARY_VALUE;
+
+	int* left_canary_ptr  = (int*)((uint8_t*)stack->data - CANARY_SIZE);
+	int* right_canary_ptr = (int*)((uint8_t*)stack->data + stack->cell_size * stack->capacity);
+
+	*left_canary_ptr = CANARY_VALUE;
+	*right_canary_ptr = CANARY_VALUE;
+
+	return STACK_OK;
+}
+
+StackResult VerifyCanary(Stack* stack)
+{
+	if (stack->left_canary != CANARY_VALUE)
+		return STACK_MEM_CORRUPTED;
+	if (stack->right_canary != CANARY_VALUE)
+		return STACK_MEM_CORRUPTED;
+
+	int* left_canary_ptr = (int*)((uint8_t*)stack->data - CANARY_SIZE);
+	int* right_canary_ptr = (int*)((uint8_t*)stack->data + stack->cell_size * stack->capacity);
+
+	if (*left_canary_ptr != CANARY_VALUE)
+		return STACK_MEM_CORRUPTED;
+	if (*right_canary_ptr != CANARY_VALUE)
+		return STACK_MEM_CORRUPTED;
+
+	return STACK_OK;
+}
+
+#endif
+
 
 #ifdef STACK_USE_HASH
 
@@ -21,6 +88,8 @@ uint64_t GetDataHash (Stack * stack)
 {
     return GetHash(stack->data, (uint8_t*)stack->data + stack->cell_size * stack->size);
 }
+
+#ifdef STACK_USE_SELF_HASH
 
 StackResult SetSelfHash(Stack * stack)
 {
@@ -46,6 +115,7 @@ StackResult VerifySelfHash(Stack * stack)
     return STACK_OK;
 }
 
+#endif
 
 #ifdef STACK_USE_DATA_HASH
 
@@ -66,7 +136,6 @@ StackResult VerifyDataHash(Stack * stack)
 }
 
 #endif
-
 
 StackResult RemoveFromHash(uint64_t * hash, void * elem, size_t size)
 {

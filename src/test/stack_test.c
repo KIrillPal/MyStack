@@ -25,7 +25,7 @@ int main()
 		StackPop(&stack, &d);
 	}
 
-	memset(&stack, '1', 4);
+	memset(&stack, '1', 20);
 
     StackDtor(&stack);
 }

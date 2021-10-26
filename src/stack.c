@@ -4,15 +4,26 @@
 #include "stack.h"
 #include "stack_utils.h"
 
+#ifdef STACK_DUMPING
+#define DUMP(stack) Dump(stack)
+#else
+#define DUMP(stack) 
+#endif
 
+#define ABORT_SILENT(error_code) { return error_code; }
 
-#define ABORT(error_code) {                                             \
-	printf("Error in %s at line %d: ", __PRETTY_FUNCTION__, __LINE__);  \
-	StackPrintErrDescription(error_code, stdout);						\
-	printf("\n"); 													    \
-	Dump(stack);						                    			\
-	abort(); 														    \
+#define ABORT_LOUD(error_code) {                                       \
+	printf("Error in %s at line %d: ", __PRETTY_FUNCTION__, __LINE__); \
+	StackPrintErrDescription(error_code, stdout);					   \
+	printf("\n"); 							                    	   \
+	abort(); 	                                                       \
 }
+
+#ifdef STACK_SILENT
+#define ABORT(error_code) { DUMP(stack); ABORT_SILENT(error_code) }
+#else 
+#define ABORT(error_code) { DUMP(stack); ABORT_LOUD(error_code) }
+#endif
 
 #define CHECK(function) {                              \
 	StackResult error_code = function;                 \
@@ -35,8 +46,13 @@
 
 static void StackDump(Stack* stack)
 {
+#ifdef STACK_SILENT
+	if (Verify(stack) == STACK_OK)
+		Dump(stack);
+#else
 	VERIFY(stack, STACK_DUMP_ERROR);
 	CHECK (Dump(stack))
+#endif
 }
 
 StackResult StackRealloc(Stack* stack, size_t new_capacity)

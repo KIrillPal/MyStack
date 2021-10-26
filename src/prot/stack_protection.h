@@ -1,7 +1,17 @@
-#ifndef STACK_HASH_H
-#define STACK_HASH_H
+#ifndef STACK_PROTECTION_H
+#define STACK_PROTECTION_H
 
 #include "../stack.h"
+
+StackResult VerifyInitalize (Stack * stack);
+StackResult VerifyParams    (Stack * stack);
+
+// Canary
+
+StackResult SetCanary(Stack* stack);
+StackResult VerifyCanary(Stack* stack);
+
+// Hash
 
 uint64_t GetHash (void* start_ptr, void* end_ptr);
 

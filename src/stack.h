@@ -5,7 +5,8 @@
 
 #include "stack_errors.h"
 
-
+//#define STACK_SILENT
+#define STACK_DUMPING
 #define PROTECTECTION_LEVEL 2
 
 #if (PROTECTECTION_LEVEL >= 1)

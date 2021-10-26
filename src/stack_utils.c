@@ -4,15 +4,7 @@
 
 #include "stack.h"
 #include "stack_utils.h"
-#include "prot/stack_verify.h"
-
-#ifdef  STACK_USE_CANARY
-#include "prot/stack_canary.h"
-#endif
-
-#ifdef  STACK_USE_HASH
-#include "prot/stack_hash.h"
-#endif
+#include "prot/stack_protection.h"
 
 
 #define TRY(function) { StackResult err = function; if (err != STACK_OK) return err; }
@@ -233,16 +225,34 @@ StackResult Verify(Stack* stack)
 
 StackResult Dump(Stack* stack)
 {
-	printf("DUMP:      %p\n", stack);
+	printf("DUMP:         %p\n\n", stack);
 #ifdef STACK_USE_CANARY
-	printf("\nLEFT CANARY:  %x\n", stack->left_canary);
-	printf("RIGHT CANARY: %x\n\n", stack->right_canary);
+	printf("LEFT CANARY:  %x\n\n", stack->left_canary);
 #endif
-	printf("INIT_STATUS:  %x\n", stack->init_status);
+
+#ifdef STACK_USE_SELF_HASH
+	printf("LHREF:        %x\n\n", stack->left_hash_ref);
+#endif
+
+	printf("INIT STATUS:  %x\n", stack->init_status);
 	printf("SIZE:         %ld\n", stack->size);
 	printf("CAPACITY:     %ld\n", stack->capacity);
-	printf("CELL_SIZE:    %ld\n", stack->cell_size);
-	printf("DATA:         %p\n", stack->data);
+	printf("CELL SIZE:    %ld\n", stack->cell_size);
+	printf("DATA:         %p\n\n", stack->data);
+
+#ifdef STACK_USE_SELF_HASH
+	printf("RHREF:        %x\n", stack->right_hash_ref);
+	printf("SELF HASH:    %x\n\n", stack->self_hash);
+#endif
+
+#ifdef STACK_USE_DATA_HASH
+	printf("DATA HASH:    %x\n\n", stack->data_hash);
+#endif
+
+#ifdef STACK_USE_SELF_HASH
+	printf("RIGHT CANARY: %x\n\n", stack->right_canary);
+#endif
+
 	printf("%d bytes: ", stack->size);
 
 	int i;
