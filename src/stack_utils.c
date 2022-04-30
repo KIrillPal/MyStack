@@ -77,11 +77,17 @@ StackResult Ctor(Stack * stack, size_t cell_size)
 #ifdef STACK_USE_CANARY
 
 	stack->data = calloc(cell_size + 2 * CANARY_SIZE, 1);
+	if (!stack->data) {
+		return STACK_CTOR_ERROR; 
+	}
 	stack->data = (uint8_t*)(stack->data) + CANARY_SIZE;
 
 	SetCanary(stack);
 #else
 	stack->data = calloc(1, cell_size);
+	if (!stack->data) {
+		return STACK_CTOR_ERROR; 
+	}
 #endif
 
 #ifdef STACK_USE_SELF_HASH
@@ -92,7 +98,7 @@ StackResult Ctor(Stack * stack, size_t cell_size)
     SetDataHash(stack);
 #endif
 
-	return stack->data ? STACK_OK : STACK_CTOR_ERROR;
+	return STACK_OK;
 }
 
 StackResult Dtor(Stack * stack)
